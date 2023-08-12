@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "BotTelegrammSearchPhone": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}
