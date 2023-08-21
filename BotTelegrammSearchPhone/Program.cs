@@ -6,6 +6,7 @@ using ClosedXML.Excel;
 using Telegram.Bot.Types.Enums;
 using Npgsql;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace TelegramBotExperiments
 {
@@ -105,23 +106,39 @@ namespace TelegramBotExperiments
                     {
                         isBlockUser = false;
                         var EmpId = Convert.ToInt32(message.Text);
-                        try
-                        {
-                            QueryUpdateAdmin("Block", EmpId);
+                        var pattern = "^((8|\\+7)[\\- ]?)?(\\(?\\d{3}\\)?[\\- ]?)?[\\d\\- ]{7,10}$";
 
-                            await botClient.SendTextMessageAsync(message.Chat, $@"Пользователь ID:{EmpId} заблокирован");
-                        }
-                        catch (Exception e)
+                        bool isValidNumber = Regex.IsMatch(message.Text.Replace(" ", ""), pattern);
+
+                        if (isValidNumber)
                         {
-                            await botClient.SendTextMessageAsync(message.Chat, $@"Пользователь ID:{EmpId} не заблокирован {e.Message}");
+                            QueryInsertUser("NoName", "NoName", "Block", message.Text, 0);
+
+                            await botClient.SendTextMessageAsync(message.Chat, $@"Пользователь по номеру телефона {message.Text} - заблокирован");
+                        }
+                        else
+                        {
+                            try
+                            {
+                                QueryUpdateAdmin("Block", EmpId);
+
+                                await botClient.SendTextMessageAsync(message.Chat, $@"Пользователь ID:{EmpId} заблокирован");
+                            }
+                            catch (Exception e)
+                            {
+                                await botClient.SendTextMessageAsync(message.Chat, $@"Пользователь ID:{EmpId} не заблокирован {e.Message}");
+                            }
+
                         }
                         return;
                     }
 
+
+
                     if (message.Text.ToLower() == "Заблокировать Пользователя".ToLower())
                     {
                         isBlockUser = true;
-                        await botClient.SendTextMessageAsync(message.Chat, $@"Введите ИД пользователя");
+                        await botClient.SendTextMessageAsync(message.Chat, $@"Введите ИД/или номер телефона пользователя");
                         return;
                     }
 
@@ -216,7 +233,7 @@ namespace TelegramBotExperiments
 
                 if (UsersDataSource.Any(x => x.UserName == message.From.Id.ToString() && x.Role == "Block"))
                 {
-                    await botClient.SendTextMessageAsync(message.Chat, "Вы заблокированы, обратитесь к администраторам");
+                    await botClient.SendTextMessageAsync(message.Chat, "Вы заблокированы, обратитесь к администраторам, обратитесь за помощью @NEAMIZE");
                     return;
                 }
 
@@ -248,19 +265,43 @@ namespace TelegramBotExperiments
 
                     if (message.Text != string.Empty)
                     {
-                        currentData.NumberPhone = message.Text;
+                        currentData.NumberPhone = message.Text.Replace(" ","").Replace("(","").Replace(")", "").Replace("-", "");
 
 
                         currentData.Status = 3;
                         if (QueryGetStatus(message.From.Id.ToString()) == -1)
                         {
                             currentData.Role = "Active";
-                            QueryInsertUser(message.From.Id.ToString(), currentData.FullName, currentData.Role, currentData.NumberPhone, currentData.Status);
+
+                            var numberPhone = currentData.NumberPhone;
+
+                            if (currentData.NumberPhone.StartsWith("+"))
+                            {
+                                numberPhone = currentData.NumberPhone.Replace("+7", "8");
+                            }
+
+                            if (currentData.NumberPhone.StartsWith("9"))
+                            {
+                                numberPhone = $"8{currentData.NumberPhone}";
+                            }
+
+                            if (UsersDataSource.Any(x => x.NumberPhone == numberPhone))
+                            {
+                                QueryDeleteUserNumberPhone(numberPhone);
+                                QueryInsertUser(message.From.Id.ToString(), currentData.FullName, "Block", numberPhone, currentData.Status);
+                                await botClient.SendTextMessageAsync(message.Chat, "Вы были заблокированы администратором обратитесь за помощью @NEAMIZE");
+                            }
+                            else
+                            {
+
+                                QueryInsertUser(message.From.Id.ToString(), currentData.FullName, currentData.Role, numberPhone, currentData.Status);
+                                await botClient.SendTextMessageAsync(message.Chat, "Данные успешно сохранены, можно вводить запрос на поиск");
+                            }
                         }
                         else
                             QueryInsertStatus(currentData.Status, message.From.Id.ToString());
 
-                        await botClient.SendTextMessageAsync(message.Chat, "Данные успешно сохранены, можно вводить запрос на поиск");
+                        
                     }
                     return;
                 }
@@ -333,6 +374,35 @@ namespace TelegramBotExperiments
                         }
 
                         if (isSearchMessage) dataSourceNew.Add(itemDataSource);
+                    }
+
+                    if (dataSourceNew.Count == 0)
+                    {
+                        string resMessage = "";
+                        string input = message.Text.ToLower();
+                        string pattern = @"(\D+)(\d+)";
+                        Match match = Regex.Match(input, pattern);
+
+                        if (match.Success)
+                        {
+                            string text = match.Groups[1].Value;
+                            int number = int.Parse(match.Groups[2].Value);
+                            resMessage = $"{text} {number}";
+                            foreach (var itemDataSource in dataSource.Where(x => x.ModelSearch.Contains(resMessage.ToLower().Split(' ')[0])))
+                            {
+                                bool isSearchMessage = true;
+                                foreach (var itemWordSecond in resMessage.ToLower().Split(' '))
+                                {
+                                    if (!itemDataSource.ModelSearch.Split(',').Contains(itemWordSecond))
+                                    {
+                                        isSearchMessage = false;
+                                        break;
+                                    }
+                                }
+
+                                if (isSearchMessage) dataSourceNew.Add(itemDataSource);
+                            }
+                        }
                     }
 
                     StringBuilder builder = new StringBuilder();
@@ -540,6 +610,7 @@ namespace TelegramBotExperiments
         }
 
 
+
         public static void QueryInsert(string model_search,string model,string text)
         {
             using (NpgsqlConnection connection = new NpgsqlConnection(connString))
@@ -612,6 +683,20 @@ namespace TelegramBotExperiments
         //        }
         //    }
         //}
+
+        public static void QueryDeleteUserNumberPhone(string NumberPhone)
+        {
+            using (NpgsqlConnection connection = new NpgsqlConnection(connString))
+            {
+                connection.Open();
+
+                using (NpgsqlCommand command = new NpgsqlCommand(@$"DELETE FROM public.""Users"" WHERE  ""NumberPhone"" = '{NumberPhone}';", connection))
+                {
+
+                    int rowsAffected = command.ExecuteNonQuery();
+                }
+            }
+        }
 
         public static void QueryInsertUser(string userName, string fullName, string role, string numberPhone, int status)
         {
