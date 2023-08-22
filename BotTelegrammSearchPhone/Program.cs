@@ -386,7 +386,7 @@ namespace TelegramBotExperiments
                         if (match.Success)
                         {
                             string text = match.Groups[1].Value.Replace(" ","");
-                            int number = int.Parse(match.Groups[2].Value).Replace(" ", "");
+                            int number = int.Parse(match.Groups[2].Value.Replace(" ", ""));
                             resMessage = $"{text}{number}";
                             foreach (var itemDataSource in dataSource.Where(x => x.ModelSearch.Contains(resMessage.ToLower().Split(' ')[0])))
                             {
