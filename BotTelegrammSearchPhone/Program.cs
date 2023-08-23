@@ -416,7 +416,7 @@ namespace TelegramBotExperiments
                         foreach (var textItem in item.Services.Split('@'))
                         {
                             var textElement = textItem.Split('$');
-                            if (textElement[1] != "") builder.AppendLine($@"{textElement[0]}: {textElement[1]} руб."); ;
+                            if (textElement[1] != "") builder.AppendLine($@"{textElement[0]}: {textElement[1]} {(!textElement[1].ToString().ToLower().Contains("мин".ToLower()) && !textElement[1].ToString().ToLower().Contains("час".ToLower()) ? "руб." : string.Empty)}"); ;
                         }
 
                         isCompliteSearch = true;
@@ -434,7 +434,7 @@ namespace TelegramBotExperiments
 
 
                     if (dataSourceNew.Count == 0)
-                        await botClient.SendTextMessageAsync(message.Chat, "По вашему запросу ничего не найдень, обратитесь за помощью @NEAMIZE");
+                        await botClient.SendTextMessageAsync(message.Chat, "По вашему запросу ничего не найдено");
                 }
 
             }
