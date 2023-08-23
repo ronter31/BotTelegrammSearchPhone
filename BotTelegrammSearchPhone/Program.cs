@@ -434,7 +434,7 @@ namespace TelegramBotExperiments
 
 
                     if (dataSourceNew.Count == 0)
-                        await botClient.SendTextMessageAsync(message.Chat, "По вашему запросу ничего не найдено");
+                        await botClient.SendTextMessageAsync(message.Chat, "По вашему запросу ничего не найдено, обратитесь за помощью @NEAMIZE");
                 }
 
             }
